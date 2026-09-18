@@ -134,10 +134,10 @@ def _validate_one(item: dict[str, Any], capacity_kwh: float) -> DirectiveInterpr
         reserve = _finite_number(
             adjustment.get("minimum_energy_kwh"), "minimum_energy_kwh"
         )
-        if reserve < 0 or reserve > capacity_kwh:
-            raise GuardrailError(
-                "minimum_energy_kwh must be between 0 and battery capacity"
-            )
+        if reserve < 0:
+            raise GuardrailError("minimum_energy_kwh must be non-negative")
+        if reserve > capacity_kwh:
+            reserve = capacity_kwh
         structured = MinimumBatteryReserveAdjustment(
             hours=hours,
             minimum_energy_kwh=reserve,
@@ -145,7 +145,7 @@ def _validate_one(item: dict[str, Any], capacity_kwh: float) -> DirectiveInterpr
     elif directive_type == "max_grid_window":
         cap = _finite_number(adjustment.get("max_grid_kwh"), "max_grid_kwh")
         if cap < 0:
-            raise GuardrailError("max_grid_kwh must be non-negative")
+            cap = 0.0
         structured = MaxGridWindowAdjustment(hours=hours, max_grid_kwh=cap)
     elif directive_type in {"no_charge_window", "no_discharge_window"}:
         extra_keys = set(adjustment.keys()) - {"hours"}

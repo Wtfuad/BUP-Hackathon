@@ -33,29 +33,47 @@ Each entry:
 
 Allowed directive_type values:
 - solar_reduction: structured_adjustment {"hours":[...],"factor": number}
-  factor is the usable solar FRACTION REMAINING, in [0,1].
-  "80% reduction" or "leave one-fifth" => factor 0.2
-  "drop to about 20%" / "20% of forecast" => factor 0.2
-  "roughly 25% of the forecast" => factor 0.25
-  "about half" / "50% of forecast" => factor 0.5
+  factor is ALWAYS the usable solar FRACTION REMAINING, in [0,1].
+  CUT vs REMAINING (do not mix these up):
+  - "reduction/cut/lose/blocked/down BY X%" => factor = 1 - X/100
+    "20% reduction" / "rdction of 20 percent" => 0.8
+    "80% reduction" => 0.2
+    "cut by half" / "lose 50%" => 0.5
+    "lose three-quarters" => 0.25
+    "99% blocked" => 0.01
+    "drops 10%" => 0.9
+    "down by twenty percent" => 0.8
+  - "drop TO X%" / "treated as X% of forecast" / "retain X%" / "one-fifth remaining"
+    => factor is the remaining fraction (20% of forecast => 0.2, one-fifth => 0.2, half of forecast => 0.5)
+  Never emit factor > 1. If a note would require factor > 1, use no_op.
 - minimum_battery_reserve: {"hours":[...],"minimum_energy_kwh": number}
   If the note gives a percentage of battery capacity, compute kWh from battery.capacity_kwh.
   Example: 50% of a 200 kWh battery => 100
+  If the stated kWh exceeds capacity, use capacity (do not invent a new type).
 - no_charge_window: {"hours":[...]}
   charging unavailable / charger isolated / do not charge
 - no_discharge_window: {"hours":[...]}
-  do not discharge / discharge disabled / protection testing
+  do not discharge / discharge disabled / protection testing / no draining
 - max_grid_window: {"hours":[...],"max_grid_kwh": number}
   per-hour grid import cap, not a sum across hours
+  "no grid draw" / "zero import" / "island mode" => max_grid_kwh 0
+  NEVER emit a negative cap. Do not drop a minus sign. If the note states a negative limit, use no_op.
 - no_op: applies=false and structured_adjustment=null
   Notes that do NOT change today's solar/battery/grid schedule:
-  menus, library hours, sports/office deadlines, club notices, seminar moved, "next week", "tomorrow" non-energy items.
+  menus, library hours, sports/office deadlines, club notices, seminar moved, "next week",
+  "tomorrow" non-energy items, tuition, coffee, phones, patients, water tanks, campus bank,
+  charging a person with a task, festival "grid layout", yesterday, next semester,
+  vague "maximize performance" with no hours.
 
 applies=true for every non-no_op directive. applies=false only for no_op.
 
 hours must be unique integers 0 through 23 in ascending order.
-Time windows use whole hours, start inclusive, end exclusive:
-- 1 PM to 3 PM => [13,14]
+Time windows are whole hours, START INCLUSIVE, END EXCLUSIVE.
+The end clock time is NOT an hour in the list.
+- 1 PM to 3 PM => [13,14]   (15:00 / 3 PM is excluded)
+- 1 PM to 2 PM / between 1 PM and 2 PM / 13:00 to 14:00 => [13] ONLY
+- 14:00 to 15:00 => [14] ONLY
+- 12 PM to 1 PM => [12] ONLY
 - noon until 2 PM => [12,13]
 - 2 AM until 5 AM => [2,3,4]
 - 6 PM until 9 PM => [18,19,20]
@@ -64,12 +82,13 @@ Time windows use whole hours, start inclusive, end exclusive:
 - 10 AM until noon => [10,11]
 - 2 PM until 4 PM => [14,15]
 - 11 AM until 1 PM => [11,12]
-- 5 PM until 7 PM => [17,18]
-- 7 PM until 9 PM => [19,20]
-- 7 PM until 10 PM => [19,20,21]
 - between 11 AM and 2 PM => [11,12,13]
 - 13:00 to 15:00 => [13,14]
-noon=12, midnight=0. 12-hour and 24-hour clocks are both valid.
+- one hour starting at 23:00 / 11 PM until midnight / end of day from 11 PM => [23]
+- from 22:00 to 00:00 / 22:00 to midnight => [22,23]
+- 00:00 to 24:00 or entire day => [0,1,...,23]
+noon=12, midnight=0. 12-hour, 24-hour, and "fourteen hundred hours" are all valid.
+A window of exactly one hour starting at H is always [H], never [H, H+1].
 
 Do not invent demand, tariff, battery hardware limits, or new directive types.
 
