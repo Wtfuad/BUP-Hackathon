@@ -115,22 +115,22 @@ These tests prove energy accounting and the HTTP contract. Hidden judge notes ar
 
 ## Docker fallback
 
-Build:
+Pull the pre-built image from Docker Hub:
 
 ```powershell
-docker build -t gridwise:2026 .
+docker pull nafferton/the-beetles-gridwise:2026
 ```
 
-Run (pass secrets at runtime; they are not baked into the image):
+Run (key at runtime, not baked in):
 
 ```powershell
-docker run --rm -p 8000:8000 -e LLM_API_KEY -e LLM_BASE_URL -e LLM_MODEL gridwise:2026
+docker run --rm -p 8000:8000 -e LLM_API_KEY -e LLM_BASE_URL=https://api.groq.com/openai/v1 -e LLM_MODEL=openai/gpt-oss-20b nafferton/the-beetles-gridwise:2026
 ```
 
-Or:
+Or run locally using an environment file:
 
 ```powershell
-docker run --rm -p 8000:8000 --env-file .env gridwise:2026
+docker run --rm -p 8000:8000 --env-file .env nafferton/the-beetles-gridwise:2026
 ```
 
 Then `curl http://127.0.0.1:8000/health` should return `{"status":"ok"}`.
