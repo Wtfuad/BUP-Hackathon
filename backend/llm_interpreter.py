@@ -85,6 +85,18 @@ Examples:
 
 "The cafeteria menu changes tomorrow."
 -> no_op, applies false, structured_adjustment null
+
+Hidden-style paraphrases of the same rules:
+"PV production will drop to about 20% between 13:00 and 15:00."
+-> solar_reduction, hours [13,14], factor 0.2
+"Panel washing from one until three will leave roughly one-fifth of normal solar output."
+-> solar_reduction, hours [13,14], factor 0.2
+"Expect an 80% reduction in rooftop solar during the 1-3 PM maintenance window."
+-> solar_reduction, hours [13,14], factor 0.2
+"Keep at least 50% of battery capacity from 6 PM until 9 PM."
+-> minimum_battery_reserve; compute kWh from capacity; hours [18,19,20]
+"From 6 PM until 9 PM, grid import must not exceed 155 kWh in any hour."
+-> max_grid_window, hours [18,19,20], max_grid_kwh 155
 """.strip()
 
 
