@@ -95,6 +95,17 @@ def _parse_raw_item(item: Any) -> dict[str, Any]:
     }
 
 
+def _as_noop(item: dict[str, Any]) -> DirectiveInterpretation:
+    """Drop one illegal note. Do not fail the rest of the request."""
+    return DirectiveInterpretation(
+        note_index=item["note_index"],
+        applies=False,
+        directive_type="no_op",
+        structured_adjustment=None,
+        explanation=item["explanation"] or "Invalid operator constraint ignored.",
+    )
+
+
 def _validate_one(item: dict[str, Any], capacity_kwh: float) -> DirectiveInterpretation:
     directive_type: DirectiveType = item["directive_type"]
     applies: bool = item["applies"]
@@ -119,6 +130,9 @@ def _validate_one(item: dict[str, Any], capacity_kwh: float) -> DirectiveInterpr
         raise GuardrailError(f"{directive_type} requires a structured_adjustment object")
 
     hours = _normalize_hours(adjustment.get("hours"))
+    if not hours:
+        return _as_noop(item)
+
     structured: (
         SolarReductionAdjustment
         | MinimumBatteryReserveAdjustment
@@ -126,16 +140,22 @@ def _validate_one(item: dict[str, Any], capacity_kwh: float) -> DirectiveInterpr
         | HoursOnlyAdjustment
     )
     if directive_type == "solar_reduction":
-        factor = _finite_number(adjustment.get("factor"), "factor")
+        try:
+            factor = _finite_number(adjustment.get("factor"), "factor")
+        except GuardrailError:
+            return _as_noop(item)
         if not 0.0 <= factor <= 1.0:
-            raise GuardrailError("solar_reduction factor must be between 0 and 1")
+            return _as_noop(item)
         structured = SolarReductionAdjustment(hours=hours, factor=factor)
     elif directive_type == "minimum_battery_reserve":
-        reserve = _finite_number(
-            adjustment.get("minimum_energy_kwh"), "minimum_energy_kwh"
-        )
+        try:
+            reserve = _finite_number(
+                adjustment.get("minimum_energy_kwh"), "minimum_energy_kwh"
+            )
+        except GuardrailError:
+            return _as_noop(item)
         if reserve < 0:
-            raise GuardrailError("minimum_energy_kwh must be non-negative")
+            return _as_noop(item)
         if reserve > capacity_kwh:
             reserve = capacity_kwh
         structured = MinimumBatteryReserveAdjustment(
@@ -143,9 +163,12 @@ def _validate_one(item: dict[str, Any], capacity_kwh: float) -> DirectiveInterpr
             minimum_energy_kwh=reserve,
         )
     elif directive_type == "max_grid_window":
-        cap = _finite_number(adjustment.get("max_grid_kwh"), "max_grid_kwh")
+        try:
+            cap = _finite_number(adjustment.get("max_grid_kwh"), "max_grid_kwh")
+        except GuardrailError:
+            return _as_noop(item)
         if cap < 0:
-            cap = 0.0
+            return _as_noop(item)
         structured = MaxGridWindowAdjustment(hours=hours, max_grid_kwh=cap)
     elif directive_type in {"no_charge_window", "no_discharge_window"}:
         extra_keys = set(adjustment.keys()) - {"hours"}
@@ -165,14 +188,16 @@ def _validate_one(item: dict[str, Any], capacity_kwh: float) -> DirectiveInterpr
 
 
 def _normalize_hours(raw_hours: Any) -> list[int]:
-    if not isinstance(raw_hours, list) or not raw_hours:
-        raise GuardrailError("hours must be a non-empty list")
+    if not isinstance(raw_hours, list):
+        raise GuardrailError("hours must be a list")
     hours: list[int] = []
     for value in raw_hours:
-        hour = _coerce_hour(value)
-        if hour < 0 or hour > 23:
-            raise GuardrailError(f"hour {hour} is outside 0..23")
-        hours.append(hour)
+        try:
+            hour = _coerce_hour(value)
+        except GuardrailError:
+            continue
+        if 0 <= hour <= 23:
+            hours.append(hour)
     return sorted(set(hours))
 
 
@@ -269,12 +294,12 @@ if __name__ == "__main__":
                     "note_index": 0,
                     "applies": True,
                     "directive_type": "solar_reduction",
-                    "structured_adjustment": {"hours": [12, 13], "factor": 1.5},
+                    "structured_adjustment": {"hours": "13-14", "factor": 0.2},
                     "explanation": "x",
                 },
                 gold.directive_interpretation[1].model_dump(),
             ],
-            "factor",
+            "hours must be a list",
         ),
     ]
     # SAMPLE-01 has 2 notes, so first negative case needs 2 entries too.

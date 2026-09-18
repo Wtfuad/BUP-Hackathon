@@ -43,9 +43,25 @@ Allowed directive_type values:
     "99% blocked" => 0.01
     "drops 10%" => 0.9
     "down by twenty percent" => 0.8
-  - "drop TO X%" / "treated as X% of forecast" / "retain X%" / "one-fifth remaining"
+  - "drop TO X%" / "falls to X%" / "treated as X% of forecast" / "retain X%" / "one-fifth remaining"
+    / "at X% capacity" / "operate at X% efficiency" / "only X of normal"
     => factor is the remaining fraction (20% of forecast => 0.2, one-fifth => 0.2, half of forecast => 0.5)
-  Never emit factor > 1. If a note would require factor > 1, use no_op.
+  Word-math examples (remaining factor):
+    reduced BY twenty-five percent => 0.75; falls TO twenty-five percent => 0.25
+    lose three-quarters => 0.25; retain three-quarters => 0.75
+    slashed BY a third => ~0.67; drops TO a third => ~0.33
+    halved / cut in half / 50/50 reduction => 0.5
+    one-twentieth available => 0.05; 1/8th of normal => 0.125
+    ninety-nine percent DROP => 0.01; AT ninety-nine percent capacity => 0.99
+    lose four-fifths => 0.2; shaved by 10% => 0.9; decimated down by 90% => 0.1
+    drops BY point two five => 0.75; factor is zero point one five => 0.15
+    drops off by seven-tenths => 0.3
+  Never emit factor > 1 or < 0. Increase solar / factor 2.5 / drop by 200% / negative percent => no_op.
+  Zero-solar slang => factor 0.0: goose egg, completely dark, wiped off the map, flatlined,
+    total eclipse, zilch, fully covered, panels dead.
+  Zero-grid slang => max_grid_kwh 0: zero out, dead connection, not a single drop, zilch from the grid,
+    ties severed, nullified, tap shut tight, absolute zero import.
+  Battery slang: discharging is a no-go / not a single watt leave the battery => no_discharge_window.
 - minimum_battery_reserve: {"hours":[...],"minimum_energy_kwh": number}
   If the note gives a percentage of battery capacity, compute kWh from battery.capacity_kwh.
   Example: 50% of a 200 kWh battery => 100
@@ -58,6 +74,7 @@ Allowed directive_type values:
   per-hour grid import cap, not a sum across hours
   "no grid draw" / "zero import" / "island mode" => max_grid_kwh 0
   NEVER emit a negative cap. Do not drop a minus sign. If the note states a negative limit, use no_op.
+  Cap at infinity / NaN / non-numeric max => no_op (do not emit inf).
 - no_op: applies=false and structured_adjustment=null
   Notes that do NOT change today's solar/battery/grid schedule:
   menus, library hours, sports/office deadlines, club notices, seminar moved, "next week",
@@ -86,9 +103,20 @@ The end clock time is NOT an hour in the list.
 - 13:00 to 15:00 => [13,14]
 - one hour starting at 23:00 / 11 PM until midnight / end of day from 11 PM => [23]
 - from 22:00 to 00:00 / 22:00 to midnight => [22,23]
-- 00:00 to 24:00 or entire day => [0,1,...,23]
+- 00:00 to 24:00 or entire day / hours 0 through 24 => [0,1,...,23] (drop hour 24)
+- 11:59 PM to 12:00 AM => [23]
+- 23:00 tonight to 01:00 tomorrow => [23] only (drop hours after today)
+- from 2 PM until 2 PM tomorrow => [14,15,...,23]
+- midnight to 1 PM => [0,1,...,12]
+- "exactly 2 PM" / one named hour => [14]
+- empty window (13:00 to 13:00, 00:00 to 00:00) => no_op
+- hour -1 / 24:00-25:00 / 25th hour / hour 99 => no_op
+Shorthand and typos are valid energy notes: slr/solr/pv, chg, dschrg, grd, rsrv/btry,
+1400-1500, 13-14h, 23h-24h, fitty %, N0 ch4rg1ng, "down 2 10 percent", "2hndrd kwh".
 noon=12, midnight=0. 12-hour, 24-hour, and "fourteen hundred hours" are all valid.
 A window of exactly one hour starting at H is always [H], never [H, H+1].
+If a note asks for negative kWh, NaN, infinity, or only invalid hours, use no_op.
+Do not emit illegal numbers and hope the server fixes them.
 
 Do not invent demand, tariff, battery hardware limits, or new directive types.
 
